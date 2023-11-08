@@ -3,7 +3,7 @@ use std::{
     iter::Peekable
 };
 
-struct Tokenizer<'i> {
+pub (crate) struct Tokenizer<'i> {
     source: &'i str,
     chars: Peekable<CharIndices<'i>>,
     current_position: Position,
@@ -208,57 +208,60 @@ impl<'i> Iterator for Tokenizer<'i> {
 
     /// Fetches the next token. None signifies EOF.
     fn next(&mut self) -> Option<Self::Item> {
-        match self.next_char() {
-            None => None,
-            Some(ch_index) => {
-                let token_start = self.current_position;
-                match ch_index.1 {
-                    '(' =>  Some(Ok(LoxToken { kind: TokenKind::LeftParen,   span: Span { start: token_start, end: self.peek_position() } })),
-                    ')' =>  Some(Ok(LoxToken { kind: TokenKind::RightParen,  span: Span { start: token_start, end: self.peek_position() } })),
-                    '{' =>  Some(Ok(LoxToken { kind: TokenKind::LeftBrace,   span: Span { start: token_start, end: self.peek_position() } })),
-                    '}' =>  Some(Ok(LoxToken { kind: TokenKind::RightBrace,  span: Span { start: token_start, end: self.peek_position() } })),
-                    ',' =>  Some(Ok(LoxToken { kind: TokenKind::Comma,       span: Span { start: token_start, end: self.peek_position() } })),
-                    '.' =>  Some(Ok(LoxToken { kind: TokenKind::Dot,         span: Span { start: token_start, end: self.peek_position() } })),
-                    '-' =>  Some(Ok(LoxToken { kind: TokenKind::Minus,       span: Span { start: token_start, end: self.peek_position() } })),
-                    '+' =>  Some(Ok(LoxToken { kind: TokenKind::Plus,        span: Span { start: token_start, end: self.peek_position() } })),
-                    ';' =>  Some(Ok(LoxToken { kind: TokenKind::Semicolon,   span: Span { start: token_start, end: self.peek_position() } })),
-                    '/' =>  Some(Ok(LoxToken { kind: TokenKind::Slash,       span: Span { start: token_start, end: self.peek_position() } })),
-                    '*' =>  Some(Ok(LoxToken { kind: TokenKind::Star,        span: Span { start: token_start, end: self.peek_position() } })),
-                    '!' => {
-                        if self.match_char('=') {
-                            Some(Ok(LoxToken { kind: TokenKind::BangEqual,   span: Span { start: token_start, end: self.peek_position() } }))
-                        } else {
-                            Some(Ok(LoxToken { kind: TokenKind::Bang,        span: Span { start: token_start, end: self.peek_position() } }))
+        loop {
+            match self.next_char() {
+                None => return None,
+                Some(ch_index) => {
+                    let token_start = self.current_position;
+                    match ch_index.1 {
+                        '(' =>  return Some(Ok(LoxToken { kind: TokenKind::LeftParen,   span: Span { start: token_start, end: self.peek_position() } })),
+                        ')' =>  return Some(Ok(LoxToken { kind: TokenKind::RightParen,  span: Span { start: token_start, end: self.peek_position() } })),
+                        '{' =>  return Some(Ok(LoxToken { kind: TokenKind::LeftBrace,   span: Span { start: token_start, end: self.peek_position() } })),
+                        '}' =>  return Some(Ok(LoxToken { kind: TokenKind::RightBrace,  span: Span { start: token_start, end: self.peek_position() } })),
+                        ',' =>  return Some(Ok(LoxToken { kind: TokenKind::Comma,       span: Span { start: token_start, end: self.peek_position() } })),
+                        '.' =>  return Some(Ok(LoxToken { kind: TokenKind::Dot,         span: Span { start: token_start, end: self.peek_position() } })),
+                        '-' =>  return Some(Ok(LoxToken { kind: TokenKind::Minus,       span: Span { start: token_start, end: self.peek_position() } })),
+                        '+' =>  return Some(Ok(LoxToken { kind: TokenKind::Plus,        span: Span { start: token_start, end: self.peek_position() } })),
+                        ';' =>  return Some(Ok(LoxToken { kind: TokenKind::Semicolon,   span: Span { start: token_start, end: self.peek_position() } })),
+                        '/' =>  return Some(Ok(LoxToken { kind: TokenKind::Slash,       span: Span { start: token_start, end: self.peek_position() } })),
+                        '*' =>  return Some(Ok(LoxToken { kind: TokenKind::Star,        span: Span { start: token_start, end: self.peek_position() } })),
+                        '!' => {
+                            if self.match_char('=') {
+                                return Some(Ok(LoxToken { kind: TokenKind::BangEqual,   span: Span { start: token_start, end: self.peek_position() } }))
+                            } else {
+                                return Some(Ok(LoxToken { kind: TokenKind::Bang,        span: Span { start: token_start, end: self.peek_position() } }))
+                            }
                         }
-                    }
-                    '>' => {
-                        if self.match_char('=') {
-                            Some(Ok(LoxToken { kind: TokenKind::GreaterEqual,   span: Span { start: token_start, end: self.peek_position() } }))
-                        } else {
-                            Some(Ok(LoxToken { kind: TokenKind::Greater,        span: Span { start: token_start, end: self.peek_position() } }))
+                        '>' => {
+                            if self.match_char('=') {
+                                return Some(Ok(LoxToken { kind: TokenKind::GreaterEqual,   span: Span { start: token_start, end: self.peek_position() } }))
+                            } else {
+                                return Some(Ok(LoxToken { kind: TokenKind::Greater,        span: Span { start: token_start, end: self.peek_position() } }))
+                            }
                         }
-                    }
-                    '<' => {
-                        if self.match_char('=') {
-                            Some(Ok(LoxToken { kind: TokenKind::LessEqual,   span: Span { start: token_start, end: self.peek_position() } }))
-                        } else {
-                            Some(Ok(LoxToken { kind: TokenKind::Less,        span: Span { start: token_start, end: self.peek_position() } }))
+                        '<' => {
+                            if self.match_char('=') {
+                                return Some(Ok(LoxToken { kind: TokenKind::LessEqual,   span: Span { start: token_start, end: self.peek_position() } }))
+                            } else {
+                                return Some(Ok(LoxToken { kind: TokenKind::Less,        span: Span { start: token_start, end: self.peek_position() } }))
+                            }
                         }
-                    }
-                    '0'..='9' => {
-                        Some(self.match_number(token_start))
-                    }
-                    '"' => {
-                        Some(self.match_string())
-                    }
-                    'a'..='z'
-                    | 'A'..='Z'
-                    | '_' => {
-                        Some(Ok(self.match_identifier(token_start)))
-                    }
-                    _ => {
-                        // TODO: panic mode recovery.
-                        return Some(Err(LoxParseErr { kind: ErrKind::InvalidChar, span: Span { start: token_start, end: self.peek_position() } }))
+                        '0'..='9' => {
+                            return Some(self.match_number(token_start))
+                        }
+                        '"' => {
+                            return Some(self.match_string())
+                        }
+                        'a'..='z'
+                        | 'A'..='Z'
+                        | '_' => {
+                            return Some(Ok(self.match_identifier(token_start)))
+                        }
+                        other => {
+                            if other.is_ascii_whitespace() { continue; }
+                            // TODO: panic mode recovery.
+                            return Some(Err(LoxParseErr { kind: ErrKind::InvalidChar, span: Span { start: token_start, end: self.peek_position() } }))
+                        }
                     }
                 }
             }
@@ -333,7 +336,7 @@ struct Position {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct LoxParseErr {
+pub (crate) struct LoxParseErr {
     kind: ErrKind,
     span: Span
 }

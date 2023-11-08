@@ -9,10 +9,17 @@ use std::{
     }
 };
 
-mod interpreter;
-use interpreter::run;
-
+mod fixed_vec;
+mod chunk;
 mod tokenizer;
+mod value;
+mod object;
+mod compiler;
+mod vm;
+use vm::run;
+
+const DEBUG_TRACE_EXECUTION: bool = true;
+const DEBUG_DUMP_INSTRUCTIONS: bool = false;
 
 fn main() {
     let mut args = args();
@@ -33,16 +40,24 @@ fn main() {
             run(&code);
         }
         None => {
-            stdout()
-                .write_all("> ".as_bytes())
-                .expect("Failed to write to stdout");
+            loop {
+                let mut stdout = stdout();
+                stdout.write_all("> ".as_bytes())
+                    .expect("Failed to write to stdout");
 
-            let mut code = String::new();
-            stdin()
-                .read_line(&mut code)
-                .expect("Failed to read from stdin.");
+                stdout.flush().expect("Failed to write to stdout");
 
-            run(&code);
+                let mut code = String::new();
+                stdin()
+                    .read_line(&mut code)
+                    .expect("Failed to read from stdin.");
+
+                if code.trim().len() == 0 {
+                    break;
+                }
+
+                run(&code);
+            }
         }
     }
 }
