@@ -52,7 +52,7 @@ var num2 = 42
 print (num1 + num2 - 4) * 2 / 4 == 20; // true
 
 print true or false; // true
-print false && true; // false
+print false and true; // false
 ```
 
 Lox also supports the standard comparison operators, which include:
