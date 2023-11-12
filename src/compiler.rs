@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::{Debug, Display}, vec::IntoIter, iter::Peekable};
+use std::{error::Error, fmt::{Debug, Display}, vec::IntoIter, iter::Peekable, collections::HashSet};
 
 use tree_iterators_rs::prelude::{BinaryTreeNode, OwnedBinaryTreeNode};
 
@@ -10,8 +10,8 @@ use crate::{
     chunk::{Chunk, OpCode}, value::Value, object::Object, fixed_vec::FixedVec, vm::STACK_MAX
 };
 
-pub (crate) fn compile(source: &str) -> Result<(Vec<Chunk>, FixedVec<Value, STACK_MAX>), Vec<CompileErr>> {
-    let mut token_stream = Tokenizer::new(source);
+pub (crate) fn compile(source: &str) -> Result<(Vec<Chunk>, FixedVec<Value, STACK_MAX>, HashSet<String>), Vec<CompileErr>> {
+    let token_stream = Tokenizer::new(source);
     let mut errs = None;
     let mut tokens = Vec::new();
     for token_result in token_stream {
@@ -48,13 +48,13 @@ struct Compiler<'c> {
     chunks: Vec<Chunk>,
     errs: Vec<CompileErr>,
     values: FixedVec<Value, STACK_MAX>,
+    strings: HashSet<String>,
 
     source_code: &'c str,
     tokens: Option<Peekable<IntoIter<LoxToken>>>,
 
     previous: Option<LoxToken>,
     current: Option<LoxToken>,
-    emitted_return: bool,
 }
 
 impl<'c> Compiler<'c> {
@@ -66,15 +66,15 @@ impl<'c> Compiler<'c> {
             current: None,
             tokens: Some(tokens.into_iter().peekable()),
             source_code: source_code,
+            strings: HashSet::with_capacity(STACK_MAX),
             chunks: Vec::new(),
             errs: Vec::new(),
             state: CompilerState::Declaration,
             values: FixedVec::<_, STACK_MAX>::new(),
-            emitted_return: false,
         }
     }
 
-    fn compile(mut self) -> Result<(Vec<Chunk>, FixedVec<Value, STACK_MAX>), Vec<CompileErr>> {
+    fn compile(mut self) -> Result<(Vec<Chunk>, FixedVec<Value, STACK_MAX>, HashSet<String>), Vec<CompileErr>> {
         while let Some(_) = self.tokens
                 .as_mut()
                 .expect("tokenizer to be yielded to active Compiler")
@@ -95,11 +95,45 @@ impl<'c> Compiler<'c> {
         if self.errs.len() > 0 {
             Err(self.errs)
         } else {
-            Ok((self.chunks, self.values))
+            Ok((self.chunks, self.values, self.strings))
         }
     }
 
     fn declaration(&mut self) {
+        loop {
+            if self.tokens
+                .as_mut()
+                .expect("tokens to be in active compiler")
+                .peek()
+                .is_none() { 
+                    break; 
+                }
+
+            if self.match_token(TokenKind::Class) {
+                todo!();
+            } else if self.match_token(TokenKind::Fun) {
+                todo!();
+            } else if self.match_token(TokenKind::Print) {
+                self.expression_statement();
+                self.chunks.push(self.chunk(OpCode::Print as u8));
+                if !self.match_token(TokenKind::Semicolon) {
+                    self.errs.push(
+                        self.error(CompileErrKind::MissingSemicolon)
+                    );
+                }
+            } else {
+                self.expression_statement();
+                if !self.match_token(TokenKind::Semicolon) {
+                    self.errs.push(
+                        self.error(CompileErrKind::MissingSemicolon)
+                    );
+                }
+                self.chunks.push(self.chunk(OpCode::Pop as u8));
+            }
+        }
+    }
+
+    fn expression_statement(&mut self) {
         let expr = self.expression();
         for node in expr.dfs_postorder() {
             match node {
@@ -116,11 +150,13 @@ impl<'c> Compiler<'c> {
                     match leaf {
                         ExpressionLeaf::Value(value) => {
                             self.chunks.push(self.chunk(OpCode::Constant as u8));
-                            if self.values.len() == u8::MAX as usize {
+                            if self.values.len() == self.values.capacity() {
                                 self.errs.push(self.error(CompileErrKind::TooManyValues))
                             } else {
                                 self.chunks.push(self.chunk(self.values.len() as u8));
-                                self.values.push(value);
+                                // Already checked the u8::MAX condition, so this should be infallible
+                                self.values.push(value)
+                                    .expect("fixed vec to not overflow after checking condition");
                             }
                         }
                         ExpressionLeaf::Error(err) => {
@@ -380,13 +416,18 @@ impl<'c> Compiler<'c> {
                             self.source_code[token.range()].parse::<f64>().expect("Number to successfully parse to f64")
                         )
                     ),
-                    TokenKind::String => Self::value_node(
+                    TokenKind::String => {
+                        let source = &self.source_code[token.range()];
+                        let source = source[1..source.len() - 1].to_string();
+                        let string = source.to_string();
+                        self.strings.insert(string);
+                        Self::value_node(
                         Value::Object(Box::new(
-                            Object::String(Box::new(
-                                self.source_code[token.range()].to_string()
+                            Object::String(
+                                (&*self.strings.get(&source).unwrap()) as *const String
                             ))
                         ))
-                    ),
+                    }
                     TokenKind::Nil => Self::value_node(Value::Nil),
                     TokenKind::LeftParen => {
                         // logical groupings reset to lowest precedence level
@@ -446,7 +487,7 @@ impl<'c> Compiler<'c> {
     }
 
     fn error_at_current(&self, kind: CompileErrKind) -> CompileErr {
-        CompileErr { 
+        CompileErr {
             kind,
             location: self.current
                 .expect("current to have a value when reporting errors")
@@ -564,6 +605,7 @@ pub (crate) enum CompileErrKind {
     Parse(LoxParseErr),
     UnexpectedToken(Unexpected),
     TooManyValues,
+    MissingSemicolon,
 }
 
 #[derive(Clone, Debug)]

@@ -1,11 +1,11 @@
-use std::process::ExitCode;
+use std::{process::ExitCode, fmt::Display, collections::HashSet};
 
 use crate::{ 
     fixed_vec::FixedVec, 
     chunk::{Chunk, OpCode}, 
     DEBUG_TRACE_EXECUTION, 
     DEBUG_DUMP_INSTRUCTIONS,
-    value::Value, 
+    value::Value,
     compiler::compile, object::Object
 };
 
@@ -20,14 +20,22 @@ pub (crate) fn run<'i>(program: &'i str) -> ExitCode {
         }
         Ok(chunks) => result = chunks,
     }
-
-    match VM::new(result.0, result.1).run() {
+    match VM::new(result.0, result.1, result.2).run() {
         Ok(()) => return ExitCode::SUCCESS,
         Err(err) => {
             match err {
-                VMErr::RuntimeErr(_) => return ExitCode::from(70),
-                VMErr::Panic(_) => return ExitCode::FAILURE,
-                VMErr::OutOfIterations => return ExitCode::SUCCESS, 
+                VMErr::RuntimeErr(err) => {
+                    println!("{}", err);
+                    return ExitCode::from(70);
+                }
+                VMErr::Panic(_) => {
+                    println!("VM internally panicked");
+                    return ExitCode::FAILURE;
+                }
+                VMErr::OutOfIterations => {
+                    println!("VM exceeded 1 million operations while executing the program. Execution has been terminated.");
+                    return ExitCode::SUCCESS
+                }
             }
         }
     }
@@ -48,6 +56,12 @@ pub (crate) struct RunTimeErr {
     kind: RunTimeErrKind,
 }
 
+impl Display for RunTimeErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[line: {}] Error: {}", self.line, format!("{}", self.kind))
+    }
+}
+
 pub (crate) enum RunTimeErrKind {
     ArithmeticOnNonNumber,
     ComparisonOnNonNumber,
@@ -55,20 +69,37 @@ pub (crate) enum RunTimeErrKind {
     BooleanOperationOnNumber,
 }
 
+impl Display for RunTimeErrKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            RunTimeErrKind::ArithmeticOnNonNumber => "Attempted to perform arithmetic/math operations on a non-number.",
+            RunTimeErrKind::ComparisonOnNonNumber => "Attempted to perform comparison operations on a non-number.",
+            RunTimeErrKind::BooleanOperationOnObject => "Attempted to perform boolean (and/or) operations on an object.",
+            RunTimeErrKind::BooleanOperationOnNumber => "Attempted to perform boolean (and/or) operations on a number.",
+        };
+
+        write!(f, "{}", msg)
+    }
+}
+
 struct VM {
     code: Vec<Chunk>,
+    ip: usize,
     compiled_values: FixedVec<Value, STACK_MAX>,
     runtime_values: FixedVec<Value, STACK_MAX>,
-    ip: usize,
+    runtime_strings: HashSet<String>,
+    compiled_strings: HashSet<String>,
 }
 
 impl VM {
-    fn new(code: Vec<Chunk>, values: FixedVec<Value, STACK_MAX>) -> Self {
+    fn new(code: Vec<Chunk>, values: FixedVec<Value, STACK_MAX>, strings: HashSet<String>) -> Self {
         Self {
             code,
             ip: 0,
             compiled_values: values,
             runtime_values: FixedVec::<Value, STACK_MAX>::new(),
+            compiled_strings: strings,
+            runtime_strings: HashSet::new(),
         }
     }
 
@@ -105,7 +136,10 @@ impl VM {
                         OpCode::Nil => todo!(),
                         OpCode::True => todo!(),
                         OpCode::False => todo!(),
-                        OpCode::Pop => todo!(),
+                        OpCode::Pop => {
+                            self.pop_value();
+                            self.ip += 1;
+                        },
                         OpCode::GetLocal => todo!(),
                         OpCode::SetLocal => todo!(),
                         OpCode::GetGlobal => todo!(),
@@ -141,8 +175,7 @@ impl VM {
                                 },
                                 Value::Object(b) => {
                                     if let Value::Object(a) = self.pop_value() {
-                                        // check reference equality.
-                                        self.push_value(Value::Boolean(&*a as *const Object == &*b as *const Object))
+                                        self.push_value(Value::Boolean(*a == *b));
                                     }
                                 },
                             }
@@ -173,14 +206,46 @@ impl VM {
                             self.ip += 1;
                         },
                         OpCode::Add => {
-                            if let Value::Number(b) = self.pop_value() {
-                                if let Value::Number(a) = self.pop_value() {
-                                    self.push_value(Value::Number(a + b));
-                                } else {
+                            match self.pop_value() {
+                                Value::Number(b) => {
+                                    if let Value::Number(a) = self.pop_value() {
+                                        self.push_value(Value::Number(a + b));
+                                    } else {
+                                        return Err(self.runtime_err(RunTimeErrKind::ArithmeticOnNonNumber));
+                                    }
+                                }
+                                Value::Object(b) => {
+                                    if let Object::String(b) = *b {
+                                        if let Value::Object(a) = self.pop_value() {
+                                            if let Object::String(a) = *a {
+                                                let mut new_str = (unsafe { &*a }).clone();
+                                                new_str.push_str(unsafe { &*b });
+                                                match self.compiled_strings.get(&new_str) {
+                                                    None => {
+                                                        self.runtime_strings.insert(new_str.clone());
+                                                        self.push_value(
+                                                            Value::Object(Box::new(
+                                                                Object::String(
+                                                                    self.runtime_strings.get(&new_str).unwrap() as *const String
+                                                                ))
+                                                            ))
+                                                    }
+                                                    Some(compiled) => {
+                                                        self.push_value(
+                                                            Value::Object(Box::new(
+                                                                Object::String(
+                                                                    &*compiled as *const String
+                                                                ))
+                                                            ))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {
                                     return Err(self.runtime_err(RunTimeErrKind::ArithmeticOnNonNumber));
                                 }
-                            } else {
-                                return Err(self.runtime_err(RunTimeErrKind::ArithmeticOnNonNumber));
                             }
                             self.ip += 1;
                         },
@@ -242,7 +307,10 @@ impl VM {
                             }
                             self.ip += 1;
                         },
-                        OpCode::Print => todo!(),
+                        OpCode::Print => {
+                            println!("{}", self.pop_value().to_string());
+                            self.ip += 1;
+                        },
                         OpCode::Jump => todo!(),
                         OpCode::JumpIfFalse => todo!(),
                         OpCode::Loop => todo!(),
@@ -252,7 +320,6 @@ impl VM {
                         OpCode::Closure => todo!(),
                         OpCode::CloseUpValue => todo!(),
                         OpCode::Return => {
-                            println!("{}", self.runtime_values.get(0).unwrap_or(&Value::Nil).to_string());
                             return Ok(())
                         },
                         OpCode::Class => todo!(),
@@ -274,12 +341,32 @@ impl VM {
                 .expect("Value pointed to to be populated.")
                 .clone();
 
-        self.runtime_values.push(value);
+        if let Value::Object(obj) = &value {
+            if let Object::String(string) = &**obj {
+                let string = self.compiled_strings.get(unsafe { &**string }).expect("compiled string to be available at runtime");
+                self.runtime_values.push(
+                    Value::Object(Box::new(
+                        Object::String(
+                            &*string as *const String
+                        )
+                    ))
+                ).expect("There to never be too many values at runtime");
+                self.ip += 1;
+                return;
+            }
+        }
+
+        self.runtime_values
+            .push(value)
+            .expect("There to never be too many values at runtime");
+
         self.ip += 1;
     }
 
     fn push_value(&mut self, val: Value) {
-        self.runtime_values.push(val);
+        self.runtime_values
+            .push(val)
+            .expect("Runtime to never have too many values");
     }
 
     fn pop_value(&mut self) -> Value {

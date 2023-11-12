@@ -1,4 +1,4 @@
-use crate::object::{Object, Function};
+use crate::object::Object;
 
 #[derive(Debug, Default)]
 pub (crate) enum Value {
@@ -15,7 +15,7 @@ impl Value {
             Value::Nil => "nil".to_string(),
             Value::Boolean(bool) => bool.to_string(),
             Value::Number(num) => num.to_string(),
-            Value::Object(_) => todo!(),
+            Value::Object(obj) => obj.to_string(),
         }
     }
 }
@@ -26,25 +26,7 @@ impl Clone for Value {
             Self::Nil => Self::Nil,
             Self::Boolean(arg0) => Self::Boolean(arg0.clone()),
             Self::Number(arg0) => Self::Number(arg0.clone()),
-            Self::Object(arg0) => todo!(),
+            Self::Object(arg0) => Self::Object(arg0.clone()),
         }
-    }
-}
-
-impl From<Function> for Value {
-    fn from(func: Function) -> Self {
-        todo!();
-        // Value::Object(
-        //     Box::new(
-        //         Object::Closure(
-        //             Box::new(
-        //                 Closure {
-        //                     function: func,
-        //                     upvalues: Vec::with_capacity(func.upvalue_count as usize),
-        //                 }
-        //             )
-        //         )
-        //     )
-        // )
     }
 }

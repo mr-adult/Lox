@@ -48,6 +48,10 @@ impl<T, const N: usize> FixedVec<T, N> {
         self.len
     }
 
+    pub (crate) fn capacity(&self) -> usize {
+        N
+    }
+
     pub (crate) fn iter<'a>(&'a self) -> Iter<'a, T> {
         Iter { inner: self.arr.iter() }
     }
@@ -108,6 +112,7 @@ impl<T, const N: usize> Iterator for IntoIter<T, N> {
     }
 }
 
+#[derive(Debug)]
 pub (crate) enum FixedVecErr {
     AlreadyFull,
 }

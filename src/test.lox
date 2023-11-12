@@ -1,0 +1,6 @@
+print 1 + 2 - 3;
+90 - 89;
+print "hello world!";
+
+print false == true;
+print 1 < 2;
