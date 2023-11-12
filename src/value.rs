@@ -1,6 +1,6 @@
 use crate::object::{Object, Function};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub (crate) enum Value {
     #[default]
     Nil,

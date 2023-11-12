@@ -3,7 +3,11 @@ use std::usize;
 use crate::{fixed_vec::FixedVec, value::Value};
 
 #[repr(u8)]
+#[derive(Debug, Default)]
 pub (crate) enum OpCode {
+    #[default]
+    Unknown = u8::MAX,
+
     Constant = 0,
     Nil = 1,
     True = 2,
@@ -44,8 +48,12 @@ pub (crate) enum OpCode {
 }
 
 impl OpCode {
+    pub (crate) fn max() -> u8 {
+        OpCode::Method as u8
+    }
     fn as_str(&self) -> &str {
         match self {
+            OpCode::Unknown => "Unknown",
             OpCode::Constant => "Constant",
             OpCode::Nil => "Nil",
             OpCode::True => "True",
@@ -174,7 +182,12 @@ impl Chunk {
                 print_val.push_str("CONSTANT ");
                 print_val.push_str(&constant.to_string());
                 print_val.push(' ');
-                print_val.push_str(&constants.get(constant as usize).unwrap().to_string());
+                print_val.push_str(
+                    &constants.get(
+                        constant as usize
+                    ).expect("value to be defined.")
+                        .to_string()
+                );
                 result = index + 2;
             },
             OpCode::Nil => {
@@ -311,17 +324,23 @@ impl Chunk {
             },
             OpCode::Class => { 
                 print_val.push_str("Class"); 
-                result = index + 1; },
+                result = index + 1; 
+            },
             OpCode::Inherit => { 
                 print_val.push_str("Inherit"); 
-                result = index + 1; },
+                result = index + 1; 
+            },
             OpCode::Method => { 
                 print_val.push_str("Method"); 
-                result = index + 1; },
+                result = index + 1; 
+            },
+            OpCode::Unknown => {
+                print_val.push_str("Unknown");
+                result = index + 1;
+            }
         }
 
         println!("{}", print_val);
-        
         result
     }
 }

@@ -55,7 +55,7 @@ print true or false; // true
 print false and true; // false
 ```
 
-Lox also supports the standard comparison operators, which include:
+Lox also supports the standard comparison operators (only on numbers), which include:
 '<', '>', '<=', '>=', '==', and '!=.'
 
 ### Variables

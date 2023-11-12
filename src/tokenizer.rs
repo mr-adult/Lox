@@ -1,6 +1,6 @@
 use std::{
     str::CharIndices, 
-    iter::Peekable
+    iter::Peekable, fmt::Display, u8, ops::Range, error::Error
 };
 
 pub (crate) struct Tokenizer<'i> {
@@ -64,6 +64,7 @@ impl<'i> Tokenizer<'i> {
     }
 
     fn match_identifier(&mut self, start_pos: Position) -> LoxToken {
+        let start = self.current_position;
         self.match_char_if(|(_, ch)| {
             match ch {
                 'a'..='z'
@@ -83,7 +84,7 @@ impl<'i> Tokenizer<'i> {
             }
         });
 
-        let ident = &self.source[self.current_position.byte..self.peek_position().byte];
+        let ident = &self.source[start.byte..self.peek_position().byte];
         let kind = match ident {
             "and" => TokenKind::And,
             "class" => TokenKind::Class,
@@ -223,13 +224,41 @@ impl<'i> Iterator for Tokenizer<'i> {
                         '-' =>  return Some(Ok(LoxToken { kind: TokenKind::Minus,       span: Span { start: token_start, end: self.peek_position() } })),
                         '+' =>  return Some(Ok(LoxToken { kind: TokenKind::Plus,        span: Span { start: token_start, end: self.peek_position() } })),
                         ';' =>  return Some(Ok(LoxToken { kind: TokenKind::Semicolon,   span: Span { start: token_start, end: self.peek_position() } })),
-                        '/' =>  return Some(Ok(LoxToken { kind: TokenKind::Slash,       span: Span { start: token_start, end: self.peek_position() } })),
+                        '/' =>  {
+                            // single line comment
+                            if self.match_char('/') {
+                                self.match_char_while(|ch| ch.1 != '\n');
+                                self.match_char('\n');
+                                // We don't return comment tokens.
+                            // multi line comment
+                            } else if self.match_char('*') {
+                                loop {
+                                    self.match_char_while(|ch| ch.1 != '*');
+                                    if self.match_char('*') && self.match_char('/') {
+                                        break;
+                                    }
+                                    // Break if we hit EOF.
+                                    if self.chars.peek().is_none() { break; }
+                                }
+                                // We don't return comment tokens.
+                            // otherwise, division
+                            } else {
+                                return Some(Ok(LoxToken { kind: TokenKind::Slash,       span: Span { start: token_start, end: self.peek_position() } }));
+                            }
+                        }
                         '*' =>  return Some(Ok(LoxToken { kind: TokenKind::Star,        span: Span { start: token_start, end: self.peek_position() } })),
                         '!' => {
                             if self.match_char('=') {
                                 return Some(Ok(LoxToken { kind: TokenKind::BangEqual,   span: Span { start: token_start, end: self.peek_position() } }))
                             } else {
                                 return Some(Ok(LoxToken { kind: TokenKind::Bang,        span: Span { start: token_start, end: self.peek_position() } }))
+                            }
+                        }
+                        '=' => {
+                            if self.match_char('=') {
+                                return Some(Ok(LoxToken { kind: TokenKind::EqualEqual,   span: Span { start: token_start, end: self.peek_position() } }))
+                            } else {
+                                return Some(Ok(LoxToken { kind: TokenKind::Equal,        span: Span { start: token_start, end: self.peek_position() } }))
                             }
                         }
                         '>' => {
@@ -275,64 +304,139 @@ pub struct LoxToken {
     span: Span,
 }
 
+impl LoxToken {
+    pub (crate) fn get_start(&self) -> Position {
+        self.span.start
+    }
+
+    pub (crate) fn kind(&self) -> TokenKind {
+        self.kind
+    }
+
+    pub (crate) fn range(&self) -> Range<usize> {
+        self.span.start.byte..self.span.end.byte
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct Span {
     start: Position,
     end: Position,
 }
 
-#[derive(Clone, Copy, Debug)]
-enum TokenKind {
-    // Single char unambiguous
-    LeftParen, // (
-    RightParen, // )
-    LeftBrace, // {
-    RightBrace, // }
-    Comma, // ,
-    Dot, // .
-    Minus, // -
-    Plus, // +
-    Semicolon, // ;
-    Slash, // /
-    Star, // *
-    
-    // Single or double char ambiguous
-    Bang, // !
-    BangEqual, // !=
-    Greater, // >
-    GreaterEqual, // >=
-    Less, // <
-    LessEqual, // <=
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub (crate) enum TokenKind {
+    LeftParen = 0, // (
+    RightParen = 1, // )
+    LeftBrace = 2, // {
+    RightBrace = 3, // }
+    Comma = 4, // ,
+    Dot = 5, // .
+    Minus = 6, // -
+    Plus = 7, // +
+    Semicolon = 8, // ;
+    Slash = 9, // /
+    Star = 10, // *
+    Bang = 11, // !
+    BangEqual = 12, // !=
+    Equal = 36, // =
+    EqualEqual = 37, // ==
+    Greater = 13, // >
+    GreaterEqual = 14, // >=
+    Less = 15, // <
+    LessEqual = 16, // <=
+    Identifier = 17,
+    String = 18,
+    Number = 19,
+    And = 20,
+    Class = 21,
+    Else = 22,
+    False = 23,
+    Fun = 24,
+    For = 25,
+    If = 26,
+    Nil = 27,
+    Or = 28,
+    Print = 29,
+    Return = 30,
+    Super = 31,
+    This = 32,
+    True = 33,
+    Var = 34,
+    While = 35,
+    /// This value is never yielded by the tokenizer, but is useful for error reporting.
+    EOF = 38,
+}
 
-    // Literals
-    Identifier,
-    String,
-    Number,
+impl TokenKind {
+    pub const fn max() -> usize {
+        TokenKind::While as usize
+    }
+}
 
-    // Keywords
-    And,
-    Class,
-    Else,
-    False,
-    Fun,
-    For,
-    If,
-    Nil,
-    Or,
-    Print,
-    Return,
-    Super,
-    This,
-    True,
-    Var,
-    While
+impl TryFrom<u8> for TokenKind {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(TokenKind::LeftParen),
+            1 => Ok(TokenKind::RightParen),
+            2 => Ok(TokenKind::LeftBrace),
+            3 => Ok(TokenKind::RightBrace),
+            4 => Ok(TokenKind::Comma),
+            5 => Ok(TokenKind::Dot),
+            6 => Ok(TokenKind::Minus),
+            7 => Ok(TokenKind::Plus),
+            8 => Ok(TokenKind::Semicolon),
+            9 => Ok(TokenKind::Slash),
+            10 => Ok(TokenKind::Star),
+            11 => Ok(TokenKind::Bang),
+            12 => Ok(TokenKind::BangEqual),
+            13 => Ok(TokenKind::Greater),
+            14 => Ok(TokenKind::GreaterEqual),
+            15 => Ok(TokenKind::Less),
+            16 => Ok(TokenKind::LessEqual),
+            17 => Ok(TokenKind::Identifier),
+            18 => Ok(TokenKind::String),
+            19 => Ok(TokenKind::Number),
+            20 => Ok(TokenKind::And),
+            21 => Ok(TokenKind::Class),
+            22 => Ok(TokenKind::Else),
+            23 => Ok(TokenKind::False),
+            24 => Ok(TokenKind::Fun),
+            25 => Ok(TokenKind::For),
+            26 => Ok(TokenKind::If),
+            27 => Ok(TokenKind::Nil),
+            28 => Ok(TokenKind::Or),
+            29 => Ok(TokenKind::Print),
+            30 => Ok(TokenKind::Return),
+            31 => Ok(TokenKind::Super),
+            32 => Ok(TokenKind::This),
+            33 => Ok(TokenKind::True),
+            34 => Ok(TokenKind::Var),
+            35 => Ok(TokenKind::While),
+            other => Err(other)
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct Position {
+pub (crate) struct Position {
     line: usize,
     col: usize,
     byte: usize
+}
+
+impl Position {
+    pub (crate) fn line(&self) -> usize {
+        self.line
+    }
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "line: {}, column: {}", self.line, self.col)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -340,6 +444,19 @@ pub (crate) struct LoxParseErr {
     kind: ErrKind,
     span: Span
 }
+
+impl LoxParseErr {
+    pub (crate) fn get_start(&self) -> Position {
+        self.span.start
+    }
+}
+
+impl Display for LoxParseErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[line: {}, column: {}] {:?}", self.span.start.line, self.span.start.col, self.kind)
+    }
+}
+impl Error for LoxParseErr {}
 
 #[derive(Clone, Copy, Debug)]
 enum ErrKind {

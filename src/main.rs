@@ -18,7 +18,7 @@ mod compiler;
 mod vm;
 use vm::run;
 
-const DEBUG_TRACE_EXECUTION: bool = true;
+const DEBUG_TRACE_EXECUTION: bool = false;
 const DEBUG_DUMP_INSTRUCTIONS: bool = false;
 
 fn main() {

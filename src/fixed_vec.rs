@@ -14,9 +14,9 @@ impl<T, const N: usize> FixedVec<T, N> {
     }
 
     /// Pushes a value to the array. Returns Err if the array was full.
-    pub (crate) fn push(&mut self, val: T) -> Result<(), ()> {
+    pub (crate) fn push(&mut self, val: T) -> Result<(), FixedVecErr> {
         if self.len >= N {
-            Err(())
+            Err(FixedVecErr::AlreadyFull)
         } else {
             self.arr[self.len] = Some(val);
             self.len += 1;
@@ -49,7 +49,16 @@ impl<T, const N: usize> FixedVec<T, N> {
     }
 
     pub (crate) fn iter<'a>(&'a self) -> Iter<'a, T> {
-        Iter { fixed: self.arr.iter() }
+        Iter { inner: self.arr.iter() }
+    }
+}
+
+impl<T, const N: usize> IntoIterator for FixedVec<T, N> {
+    type Item = T;
+    type IntoIter = IntoIter<T, N>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter { inner: self.arr.into_iter() }
     }
 }
 
@@ -68,18 +77,37 @@ impl<T, const N: usize> IndexMut<usize> for FixedVec<T, N> where T: Copy {
 }
 
 pub (crate) struct Iter<'a, T> {
-    fixed: std::slice::Iter<'a, Option<T>>,
+    inner: std::slice::Iter<'a, Option<T>>,
 }
 
 impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.fixed.next() {
+        match self.inner.next() {
             None => None,
             Some(opt) => {
                 opt.as_ref()
             }
         }
     }
+}
+
+pub (crate) struct IntoIter<T, const N: usize> {
+    inner: std::array::IntoIter<Option<T>, N>,
+}
+
+impl<T, const N: usize> Iterator for IntoIter<T, N> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            None => None,
+            Some(opt) => opt,
+        }
+    }
+}
+
+pub (crate) enum FixedVecErr {
+    AlreadyFull,
 }

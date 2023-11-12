@@ -1,7 +1,8 @@
+use std::fmt::Debug;
 use crate::value::Value;
-
 use super::chunk::Chunk;
 
+#[derive(Debug)]
 pub (crate) enum Object {
     Closure(Box<Closure>),
     Function(Box<Function>),
@@ -10,6 +11,7 @@ pub (crate) enum Object {
     Upvalue(Box<UpValue>),
 }
 
+#[derive(Debug)]
 pub (crate) struct Function {
     pub (crate) arity: u8,
     pub (crate) upvalue_count: u8,
@@ -34,11 +36,22 @@ pub (crate) struct Native {
     implementation: Box<dyn Fn(Vec<Value>) -> Value>
 }
 
+impl Debug for Native {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Native")
+            .field("arity", &self.arity)
+            .field("args", &self.args)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub (crate) struct UpValue {
     location: *mut Value,
     closed: Option<Value>,
 }
 
+#[derive(Debug)]
 pub (crate) struct Closure {
     pub (crate) function: Function,
     pub (crate) upvalues: Vec<UpValue>
