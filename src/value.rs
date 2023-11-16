@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::object::Object;
 
 #[derive(Debug, Default)]
@@ -6,7 +8,7 @@ pub (crate) enum Value {
     Nil,
     Boolean(bool),
     Number(f64),
-    Object(Box<Object>),
+    Object(Rc<Object>),
 }
 
 impl Value {

@@ -1,15 +1,15 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 use super::chunk::Chunk;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, Hash)]
 pub (crate) enum Object {
-    String(*const String),
+    String(Rc<str>),
 }
 
 impl Object {
     pub (crate) fn to_string(&self) -> String {
         match self {
-            Object::String(string) => unsafe { &**string }.to_string(),
+            Object::String(string) => string.to_string(),
         }
     }
 }
@@ -17,7 +17,7 @@ impl Object {
 impl Clone for Object {
     fn clone(&self) -> Self {
         match self {
-            Object::String(string) => Object::String(unsafe { &**string } as *const String),
+            Object::String(string) => Object::String(string.clone()),
         }
     }
 }

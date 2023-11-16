@@ -1,4 +1,4 @@
-use std::{process::ExitCode, fmt::Display, collections::HashSet};
+use std::{process::ExitCode, fmt::Display, rc::Rc};
 
 use crate::{ 
     fixed_vec::FixedVec, 
@@ -6,7 +6,9 @@ use crate::{
     DEBUG_TRACE_EXECUTION, 
     DEBUG_DUMP_INSTRUCTIONS,
     value::Value,
-    compiler::compile, object::Object
+    compiler::compile, 
+    object::Object,
+    heap::ObjectHeap,
 };
 
 pub (crate) fn run<'i>(program: &'i str) -> ExitCode {
@@ -20,7 +22,7 @@ pub (crate) fn run<'i>(program: &'i str) -> ExitCode {
         }
         Ok(chunks) => result = chunks,
     }
-    match VM::new(result.0, result.1, result.2).run() {
+    match VM::new(result.0, result.1).run() {
         Ok(()) => return ExitCode::SUCCESS,
         Err(err) => {
             match err {
@@ -87,19 +89,17 @@ struct VM {
     ip: usize,
     compiled_values: FixedVec<Value, STACK_MAX>,
     runtime_values: FixedVec<Value, STACK_MAX>,
-    runtime_strings: HashSet<String>,
-    compiled_strings: HashSet<String>,
+    runtime_heap: ObjectHeap,
 }
 
 impl VM {
-    fn new(code: Vec<Chunk>, values: FixedVec<Value, STACK_MAX>, strings: HashSet<String>) -> Self {
+    fn new(code: Vec<Chunk>, values: FixedVec<Value, STACK_MAX>) -> Self {
         Self {
             code,
             ip: 0,
             compiled_values: values,
             runtime_values: FixedVec::<Value, STACK_MAX>::new(),
-            compiled_strings: strings,
-            runtime_strings: HashSet::new(),
+            runtime_heap: ObjectHeap::new(),
         }
     }
 
@@ -215,30 +215,18 @@ impl VM {
                                     }
                                 }
                                 Value::Object(b) => {
-                                    if let Object::String(b) = *b {
+                                    if let Object::String(b) = &*(b.clone()) {
                                         if let Value::Object(a) = self.pop_value() {
-                                            if let Object::String(a) = *a {
-                                                let mut new_str = (unsafe { &*a }).clone();
-                                                new_str.push_str(unsafe { &*b });
-                                                match self.compiled_strings.get(&new_str) {
-                                                    None => {
-                                                        self.runtime_strings.insert(new_str.clone());
-                                                        self.push_value(
-                                                            Value::Object(Box::new(
-                                                                Object::String(
-                                                                    self.runtime_strings.get(&new_str).unwrap() as *const String
-                                                                ))
-                                                            ))
-                                                    }
-                                                    Some(compiled) => {
-                                                        self.push_value(
-                                                            Value::Object(Box::new(
-                                                                Object::String(
-                                                                    &*compiled as *const String
-                                                                ))
-                                                            ))
-                                                    }
-                                                }
+                                            if let Object::String(a) = &*(a.clone()) {
+                                                let mut new_str = a.to_string();
+                                                new_str.push_str(&b);
+                                                let heap_ptr = self.runtime_heap.add(
+                                                    Object::String(
+                                                        new_str.into()
+                                                    ));
+                                                self.push_value(
+                                                    Value::Object(heap_ptr)
+                                                )
                                             }
                                         }
                                     }
@@ -343,11 +331,10 @@ impl VM {
 
         if let Value::Object(obj) = &value {
             if let Object::String(string) = &**obj {
-                let string = self.compiled_strings.get(unsafe { &**string }).expect("compiled string to be available at runtime");
                 self.runtime_values.push(
-                    Value::Object(Box::new(
+                    Value::Object(Rc::new(
                         Object::String(
-                            &*string as *const String
+                            (**string).into()
                         )
                     ))
                 ).expect("There to never be too many values at runtime");
