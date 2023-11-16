@@ -1,5 +1,5 @@
 # Lox
-This is my implementation of Lox. It is rust-based using a bytecode interpreter.
+This is my implementation of Lox. It is still a work in progress. It is rust-based using a bytecode interpreter.
 
 Try it yourself! This form will terminate your program if it proceeds for too long. For more syntax rules, continue reading below.
 
