@@ -3,8 +3,6 @@ This is my implementation of Lox. It is still a work in progress. It is rust-bas
 
 Try it yourself! This form will terminate your program if it proceeds for too long. For more syntax rules, continue reading below.
 
-!Input Box Goes Here!
-
 Lox is a simple scripting language. It uses C-style and enables simple scripts to be run. Lox is dynamically typed. It supports double-precision numbers (double in most programming languages), booleans, and simple string operations like concatenation. Lox is object oriented, so classes can be declared with inheritance hierarchies.
 
 ## Syntax
